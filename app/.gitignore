@@ -1,0 +1,6 @@
+node_modules
+.next
+.env.local
+# copied at build time from ../target/idl by scripts/sync-idl.js
+src/idl/prediction_market.json
+next-env.d.ts

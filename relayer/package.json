@@ -1,0 +1,32 @@
+{
+  "name": "wc-markets-relayer",
+  "version": "0.1.0",
+  "description": "TxODDS -> Solana oracle relayer: proposes and finalizes match results on-chain",
+  "license": "MIT",
+  "type": "commonjs",
+  "scripts": {
+    "build": "tsc",
+    "relayer": "ts-node src/index.ts",
+    "setup-devnet": "ts-node src/setupDevnet.ts",
+    "demo": "ts-node src/demo.ts",
+    "verified-demo": "ts-node src/verifiedDemo.ts",
+    "sim": "ts-node src/sim.ts",
+    "seed": "ts-node src/seed.ts",
+    "mint-to": "ts-node src/mintTo.ts",
+    "quick-market": "ts-node src/quickMarket.ts",
+    "settle": "ts-node src/settle.ts",
+    "create-market": "ts-node src/createMarket.ts",
+    "activate": "ts-node src/activate.ts"
+  },
+  "dependencies": {
+    "@coral-xyz/anchor": "^0.30.1",
+    "@solana/spl-token": "^0.4.6",
+    "@solana/web3.js": "^1.95.2",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.5.3"
+  }
+}

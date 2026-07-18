@@ -1,0 +1,36 @@
+# Rust / Anchor
+target/
+.anchor/
+test-ledger/
+**/*.rs.bk
+
+# Node
+node_modules/
+dist/
+.next/
+
+# Env / secrets
+.env
+.env.local
+relayer/oracle.json
+relayer/.demo-admin.json
+relayer/.demo-oracle.json
+relayer/.demo-mint.txt
+.test-wallet.json
+
+# Anchor keypairs (program deploy keys live in target/deploy — keep out of git)
+*.pem
+
+# OS
+.DS_Store
+
+# runtime state / backups — never commit
+bot/.keys/
+bot/*.log
+bot/store.json
+*.local.json
+*.local.txt
+.env*.local
+relayer/.devnet-*.txt
+striker-decisions.log
+bot/.store.json

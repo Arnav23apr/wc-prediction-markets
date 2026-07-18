@@ -1,0 +1,22 @@
+{
+  "name": "striker-bot",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Striker: the Telegram trading bot for proof-settled World Cup markets. Instant bets, odds orders, copy-betting, market sniping, PnL.",
+  "scripts": {
+    "bot": "ts-node --transpile-only src/bot.ts",
+    "build": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@coral-xyz/anchor": "^0.30.1",
+    "@solana/spl-token": "^0.4.6",
+    "@solana/web3.js": "^1.95.2",
+    "dotenv": "^16.4.5",
+    "grammy": "^1.30.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.5.3"
+  }
+}

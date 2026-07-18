@@ -1,0 +1,5 @@
+.env
+.keys/
+.store.json
+node_modules/
+dist/
