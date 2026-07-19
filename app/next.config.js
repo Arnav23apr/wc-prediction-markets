@@ -1,6 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  output: "export",
+  images: { unoptimized: true },
   webpack: (config) => {
     // wallet adapters pull in optional deps that aren't needed in the browser
     config.externals = config.externals || [];

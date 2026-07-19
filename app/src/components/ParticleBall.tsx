@@ -31,20 +31,20 @@ import {
 } from "three"
 
 interface ParticleSphereRefactorProps {
-    particlesCount: number
-    particleScale: number
-    speed: number
-    smoothing: number
-    scale: number
-    stopOnHover: boolean
+    particlesCount?: number
+    particleScale?: number
+    speed?: number
+    smoothing?: number
+    scale?: number
+    stopOnHover?: boolean
     rotationDirection?: "clockwise" | "anticlockwise"
     dragSpeed?: number
     drag?: boolean
-    cursorOn: boolean
-    cursorRadiusUI: number
-    cursorStrengthUI: number
-    clickForce: number
-    sphereColor: string
+    cursorOn?: boolean
+    cursorRadiusUI?: number
+    cursorStrengthUI?: number
+    clickForce?: number
+    sphereColor?: string
     pentagonColor?: string
     style?: React.CSSProperties
 }

@@ -134,6 +134,11 @@ export async function tick(api: Api) {
 }
 
 export function startEngine(api: Api, intervalMs = 12_000) {
-  setInterval(() => tick(api).catch((e) => console.error("engine:", e.message ?? e)), intervalMs);
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { agentTick } = require("./agent");
+  setInterval(() => {
+    tick(api).catch((e) => console.error("engine:", e.message ?? e));
+    agentTick().catch((e: any) => console.error("agent:", e.message ?? e));
+  }, intervalMs);
   console.log(`engine running every ${intervalMs / 1000}s`);
 }

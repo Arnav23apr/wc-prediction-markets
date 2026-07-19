@@ -15,6 +15,8 @@ import {
 import * as store from "./store";
 import { startEngine } from "./engine";
 import { bookOdds, edgesFor, sourceLabel } from "./txline";
+import { agentInfo, AGENT_ID } from "./agent";
+import * as fs from "fs";
 
 const token = process.env.BOT_TOKEN;
 if (!token) { console.error("BOT_TOKEN missing (bot/.env)"); process.exit(1); }
@@ -34,9 +36,9 @@ function friendly(e: any): string {
 
 const mainMenu = () => new InlineKeyboard()
   .text("Markets", "markets").text("My book", "pnl").row()
-  .text("Edge scan", "edge").text("Odds orders", "orders").row()
-  .text("Top traders", "toptraders").text("Sniper", "snipehelp").row()
-  .text("Help", "help");
+  .text("🤖 Agent", "agent").text("Edge scan", "edge").row()
+  .text("Odds orders", "orders").text("Top traders", "toptraders").row()
+  .text("Sniper", "snipehelp").text("Help", "help");
 
 // ---------- start / menu / help ----------
 bot.command(["start", "menu"], async (ctx) => {
@@ -60,6 +62,7 @@ bot.command(["start", "menu"], async (ctx) => {
 const HELP =
   `HOW STRIKER WORKS\n\n` +
   `Type any team name → its market card → tap to bet. You always see a full receipt (exact payout, fee, proof settlement) before money moves.\n\n` +
+  `AGENT: /agent runs a fully autonomous trader — deploy it and it bets the best value edge across all pools every 12s with zero human input. Watch its live decision log.\n\n` +
   `EDGE SCAN: /edge compares what the pool pays against TxLINE bookmaker fair value. When the pool pays more than the books, the crowd is mispricing it, that's your entry.\n\n` +
   `ODDS ORDERS: on any market tap "Odds order", set "fire at ≥ 2.0x" and Striker bets the instant the pool pays that. A limit order, but for football odds.\n\n` +
   `COPY-BETTING: "Top traders" → tap Copy next to anyone, every bet they make is mirrored at your size.\n\n` +
@@ -132,6 +135,38 @@ bot.callbackQuery("edge", async (ctx) => {
   const s = await edgeScan();
   if (!s) return ctx.reply("No funded open markets to scan yet.");
   await ctx.editMessageText(s.text, { reply_markup: s.kb }).catch(() => ctx.reply(s.text, { reply_markup: s.kb }));
+});
+
+// ---------- autonomous agent: status + live decision log ----------
+async function agentCard(): Promise<{ text: string; kb: InlineKeyboard }> {
+  const info = agentInfo();
+  let bal = 0;
+  try { bal = await usdcBalance(AGENT_ID); } catch {}
+  let tail = "";
+  try {
+    const lines = fs.readFileSync("striker-decisions.log", "utf8").trim().split("\n").filter((l) => l.includes("[agent]"));
+    tail = lines.slice(-6).map((l) => {
+      const t = l.slice(11, 19); // HH:MM:SS
+      const msg = l.split("] ").slice(1).join("] ");
+      return `${t}  ${msg}`;
+    }).join("\n");
+  } catch {}
+  const text =
+    `AUTONOMOUS AGENT ${info.enabled ? "● running" : "○ off"}\n` +
+    `Deploys and trades on its own — no human input. Every 12s it scans all pools and stakes the best value bet vs bookmaker fair odds.\n\n` +
+    `Wallet   ${info.wallet.slice(0, 8)}…\n` +
+    `Balance  ${bal.toFixed(0)} demo USDC\n` +
+    `Rule     bet ≥ +${info.minEdge}% edge · ${info.stake} USDC/bet\n` +
+    `Bets     ${info.betsPlaced} placed this run\n\n` +
+    (tail ? `DECISION LOG (live)\n${tail}` : `Warming up — first scan within 12s…`);
+  const kb = new InlineKeyboard().text("↻ Refresh", "agent").text("Edge scan", "edge").row().text("← Menu", "menu");
+  return { text, kb };
+}
+bot.command("agent", async (ctx) => { const c = await agentCard(); await ctx.reply(c.text, { reply_markup: c.kb }); });
+bot.callbackQuery("agent", async (ctx) => {
+  await ctx.answerCallbackQuery({ text: "Reading decision log…" });
+  const c = await agentCard();
+  await ctx.editMessageText(c.text, { reply_markup: c.kb }).catch(() => ctx.reply(c.text, { reply_markup: c.kb }));
 });
 
 async function marketCard(m: Market): Promise<{ text: string; kb: InlineKeyboard }> {
@@ -452,6 +487,7 @@ bot.api.setMyCommands([
   { command: "menu", description: "Main menu" },
   { command: "markets", description: "Open markets" },
   { command: "edge", description: "Pool vs bookmaker value scan" },
+  { command: "agent", description: "Autonomous trading agent + live log" },
   { command: "pnl", description: "Your book and balance" },
   { command: "orders", description: "Your odds orders" },
   { command: "toptraders", description: "Leaderboard, one-tap copy" },
