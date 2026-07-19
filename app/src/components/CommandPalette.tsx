@@ -11,7 +11,6 @@ interface Props {
   markets: MarketData[];
   onFilter: (f: "all" | "open" | "settled") => void;
   onHowItWorks: () => void;
-  onWorldMap: () => void;
   onJump: () => void;
   onExplorer: () => void;
   onOpenMarket: (m: MarketData) => void;
@@ -33,7 +32,7 @@ function fuzzy(hay: string, q: string): boolean {
  * ⌘K command palette — search every market and jump to any action.
  * The terminal-native way to move around a data product.
  */
-export function CommandPalette({ open, onOpenChange, markets, onFilter, onHowItWorks, onWorldMap, onJump, onExplorer, onOpenMarket, onCinema }: Props) {
+export function CommandPalette({ open, onOpenChange, markets, onFilter, onHowItWorks, onJump, onExplorer, onOpenMarket, onCinema }: Props) {
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -77,10 +76,9 @@ export function CommandPalette({ open, onOpenChange, markets, onFilter, onHowItW
     { id: "open", label: "Open markets only", group: "Filter", run: () => { onFilter("open"); onJump(); } },
     { id: "settled", label: "Settled markets only", group: "Filter", run: () => { onFilter("settled"); onJump(); } },
     { id: "hiw", label: "How settlement works", group: "Learn", run: onHowItWorks },
-    { id: "map", label: "Open world map", group: "Navigate", run: onWorldMap },
     { id: "grid", label: "Jump to markets", group: "Navigate", run: onJump },
     { id: "explorer", label: "View program on Solana Explorer", group: "Navigate", run: onExplorer },
-  ], [onFilter, onHowItWorks, onWorldMap, onJump, onExplorer, onCinema, settledDemo]);
+  ], [onFilter, onHowItWorks, onJump, onExplorer, onCinema, settledDemo]);
 
   const marketActions: Action[] = useMemo(() => markets.map((m) => ({
     id: m.pubkey.toBase58(),
@@ -113,7 +111,7 @@ export function CommandPalette({ open, onOpenChange, markets, onFilter, onHowItW
   let lastGroup = "";
 
   return (
-    <div className="cmdk-backdrop" onClick={close}>
+    <div className="cmdk-backdrop" onClick={close} data-lenis-prevent>
       <div className="cmdk" role="dialog" aria-modal="true" aria-label="Command palette" onClick={(e) => e.stopPropagation()}>
         <div className="cmdk-input-row">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" /></svg>

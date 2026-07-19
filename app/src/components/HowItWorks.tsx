@@ -29,7 +29,7 @@ export function HowItWorks({ open, onClose }: { open: boolean; onClose: () => vo
   const pid = PROGRAM_ID.toBase58();
 
   return (
-    <div className="wm-backdrop" onClick={onClose} role="dialog" aria-modal="true" aria-label="How settlement works">
+    <div className="wm-backdrop" onClick={onClose} role="dialog" aria-modal="true" aria-label="How settlement works" data-lenis-prevent>
       <div className="wm-panel" onClick={(e) => e.stopPropagation()}>
         <div className="wm-head">
           <div>

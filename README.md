@@ -1,9 +1,9 @@
-# World Cup Prediction Markets — Markets & Settlement
+# World Cup Prediction Markets, Markets & Settlement
 
 Parimutuel prediction markets for World Cup matches on **Solana**, with a
 settlement pipeline designed to be driven by the **TxODDS** football feed.
 
-Built for the TxODDS × Superteam *World Cup Hackathon — Markets & Settlement* track.
+Built for the TxODDS × Superteam *World Cup Hackathon, Markets & Settlement* track.
 
 > **Submission links** · Demo video: _in submission form_ · Live app: _in submission form_ ·
 > Devnet program: [`GxkLKoL4aUqvVnUonkM9xXegjUepEaDV68EUCJJbEwtM`](https://explorer.solana.com/address/GxkLKoL4aUqvVnUonkM9xXegjUepEaDV68EUCJJbEwtM?cluster=devnet) ·
@@ -13,12 +13,41 @@ Built for the TxODDS × Superteam *World Cup Hackathon — Markets & Settlement*
 > This repo holds **two entries**: the Markets & Settlement product (`app/` + `programs/` + `relayer/`)
 > and **Striker**, the Trading Tools & Agents entry (`bot/`, section below).
 
-> The interesting part of a prediction market isn't taking bets — it's paying
+> The interesting part of a prediction market isn't taking bets, it's paying
 > them out **correctly and trustlessly**. This project treats settlement as the
 > product: a single oracle key can *propose* a result but can never unilaterally
 > *finalize* a payout, every irregular match (abandoned, postponed, or with no
 > winning stake) refunds cleanly, and finalization is permissionless so funds
 > are never hostage to the oracle staying online.
+
+---
+
+## How this maps to the track's project directions
+
+The brief lists four example directions. Rather than build four shallow demos,
+we built one deep, working, on-chain-verifiable slice that covers three of them
+end-to-end and the core of the fourth:
+
+| Track idea | Where it lives here |
+|---|---|
+| **Full-Tournament Auto-Market**, auto-organise, display & resolve markets across the schedule from the TxLINE stream | A live board of **15+ markets across 18 nations** (devnet), each a PDA keyed by `matchId`, with a resumable seeder (`relayer/seed.ts`) that scales to the full fixture list. Outcome type is **match-winner (1X2)**; resolution is the pipeline below. |
+| **Verifiable Resolution UI**, show the TxLINE Merkle "receipt" so users don't trust an oracle | `MerkleProof.tsx` / `ProofDrawer.tsx` render the proof + `validate_stat` chain of custody; the whole product is themed **"settled by proof."** |
+| **Prediction Market Viewer**, dashboard of volumes, liquidity & shifting implied odds | The main dashboard: live pool share → implied probability, `PoolBook`, the pre-kickoff probability chart, and the activity ticker, all updating off pool state. |
+| **Decentralised markets + trustless settlement**, escrow USDC, keeper/anyone CPIs into TxLINE's validation program to unlock funds | Exactly our settlement path: USDC escrow vaults, `commit_result_validated` **CPIs into TxLINE `validate_stat`** (`programs/prediction-market/src/txline_cpi.rs`), and **anyone** can `finalize_result` to route funds. |
+
+**Parimutuel, not an AMM, on purpose.** The brief says "AMM *or* order-book"; we
+chose a third design. Parimutuel pools have **no liquidity provider to bootstrap,
+no impermanent-loss risk, and no vig**, the payout is pure, order-independent
+arithmetic over the pool, which also makes the trustless-settlement story cleaner
+(there's nothing to unwind, just a frozen snapshot to claim against). The escrow +
+CPI-settlement requirement of idea #4 is met regardless of the market mechanism.
+
+> **Not yet built (deliberate, scoped for the deadline):** additional outcome
+> *types* (total-goals over/under, first-scorer) and full 104-match coverage.
+> The `validate_stat` CPI already takes a general stat + comparison expression, and
+> we already store `homeGoals`/`awayGoals`, so a total-goals market is the natural
+> next type, we chose depth on one working, verifiable type over breadth of
+> half-finished ones.
 
 ---
 
@@ -57,10 +86,10 @@ Our settlement is deliberately a **three-stage, separation-of-powers** process:
 | **Oracle** | TxODDS relayer | Propose the result | Finalize, move funds |
 | **Watcher** | dispute authority | Freeze a bad proposal during the window | Decide the outcome |
 | **Admin** | market authority | Resolve a *disputed* market | Touch an undisputed one |
-| **Anyone** | — | Finalize after the window, trigger claims | Change the result |
+| **Anyone** | any signer | Finalize after the window, trigger claims | Change the result |
 
 The oracle proposing and the network finalizing are **different actions by
-different parties**. That gap — plus the dispute window — is the whole thesis.
+different parties**. That gap, plus the dispute window, is the whole thesis.
 
 ---
 
@@ -72,7 +101,7 @@ settlement we snapshot the numbers so claims are pure arithmetic and order-indep
 - `fee = total_pool * fee_bps / 10_000` (capped at 10%, skimmed once to treasury)
 - `payout_pool = total_pool − fee`
 - A winning position claims `stake_on_winner * payout_pool / winning_pool`
-- Rounding dust (sub-lamport) stays in the vault — claims can never sum to more
+- Rounding dust (sub-lamport) stays in the vault, claims can never sum to more
   than the pool.
 
 ### Edge-case matrix (the part that wins the track)
@@ -83,7 +112,7 @@ settlement we snapshot the numbers so claims are pure arithmetic and order-indep
 | **Match abandoned / postponed** | Oracle commits `VOID` → **every stake refunded**, zero fee |
 | **Nobody backed the winning outcome** | Auto-treated as void → **full refunds**, no trapped funds |
 | **Oracle posts a wrong result** | Watcher disputes within window → admin sets the authoritative outcome |
-| Oracle goes offline after proposing | `finalize_result` is permissionless — anyone closes it out |
+| Oracle goes offline after proposing | `finalize_result` is permissionless, anyone closes it out |
 | Double claim | `claimed` flag makes claims idempotent |
 | Bet after kickoff | Rejected on-chain (`betting_close_ts` check) |
 | Fee set absurdly high at creation | Rejected (`MAX_FEE_BPS` = 10%) |
@@ -95,7 +124,7 @@ All of the above are covered by the integration tests in `tests/`.
 ## Repo layout
 
 ```
-programs/prediction-market/   Anchor (Rust) program — the core
+programs/prediction-market/   Anchor (Rust) program, the core
   src/state.rs                Market / Position / Config accounts + status enum
   src/settlement.rs           Pure payout math + the single vault-payout primitive
   src/instructions/           initialize_market, place_bet, commit_result,
@@ -160,7 +189,7 @@ npm run setup-devnet      # prints USDC_MINT, TREASURY_TOKEN_ACCOUNT, ORACLE_KEY
 npm run create-market     # creates markets for the (mock) fixtures
 npm run relayer           # polls, proposes results, finalizes after the window
 ```
-> Leave `TXODDS_API_KEY` empty to run in **mock mode** — three scripted fixtures
+> Leave `TXODDS_API_KEY` empty to run in **mock mode**, three scripted fixtures
 > (a home win, a draw, and an abandoned match) drive a full propose→finalize
 > cycle with no external key. Drop in the real key + confirm the endpoint paths
 > in `txodds.ts` to go live.
@@ -173,7 +202,7 @@ npm run dev               # http://localhost:3000  (auto-copies the built IDL)
 
 ### Run the tests
 ```bash
-bash scripts/test-local.sh   # see step 1b — boots a local validator and runs tests/
+bash scripts/test-local.sh   # see step 1b, boots a local validator and runs tests/
 ```
 
 ### One-command end-to-end demo (real USDC, real payouts)
@@ -184,15 +213,15 @@ cd relayer && npm install
 RPC_URL=http://127.0.0.1:8899 PROGRAM_ID=GxkLKoL4aUqvVnUonkM9xXegjUepEaDV68EUCJJbEwtM npm run demo
 ```
 Creates a market, places three bets, settles via oracle commit → finalize, and
-claims — printing the on-chain balances (winners paid pro-rata, 2% fee to treasury,
+claims, printing the on-chain balances (winners paid pro-rata, 2% fee to treasury,
 loser gets nothing).
 
 ---
 
 ## Demo script (≈3 min)
 
-1. `anchor test` — show the edge-case matrix going green (payout, void, no-winner, dispute override).
-2. App: connect Phantom (devnet), place bets on a couple of outcomes — watch the
+1. `anchor test`, show the edge-case matrix going green (payout, void, no-winner, dispute override).
+2. App: connect Phantom (devnet), place bets on a couple of outcomes, watch the
    pools and implied odds shift live.
 3. Relayer terminal: a fixture hits full-time → `commit_result` logs a proposed
    outcome; market badge flips to **Result proposed** with a live dispute countdown.
@@ -219,7 +248,7 @@ The relayer talks to the real **TxLINE** API (`relayer/src/txodds.ts`):
 
 ### Trustless settlement: TxLINE Merkle-proof verification (built)
 TxLINE exposes a **three-stage Merkle proof for every score statistic**
-(`GET /api/scores/stat-validation`) — their "scout-verified, blockchain-confirmed"
+(`GET /api/scores/stat-validation`), their "scout-verified, blockchain-confirmed"
 guarantee. We verify it **on-chain**, so settlement needs no trusted oracle key:
 
 - `RootRegistry` (a singleton PDA) holds the published TxLINE batch root, refreshed
@@ -233,16 +262,16 @@ guarantee. We verify it **on-chain**, so settlement needs no trusted oracle key:
   permissionless `finalize_result` are unchanged.
 
 This turns settlement from *"trust the relayer's key"* into *"cryptographically
-prove the score came from TxODDS"* — the strongest answer to *why trust the result*.
+prove the score came from TxODDS"*, the strongest answer to *why trust the result*.
 Covered by `tests/merkle-verified.ts` (happy path + tampered-proof rejection) and
 runnable via `cd relayer && npm run verified-demo`.
 
-> Two TxLINE specifics aren't in the public docs — the hash function and exact leaf
+> Two TxLINE specifics aren't in the public docs, the hash function and exact leaf
 > byte-encoding. They're isolated to `merkle.rs` (SHA-256, domain-separated LE) and
 > mirrored in `relayer/src/verified.ts`; change both together to match live data.
 > Everything else (tree shape, three-stage fold, two-stat consistency) is final.
 
-## TxLINE API — endpoints used
+## TxLINE API, endpoints used
 
 TxLINE (`https://txline.txodds.com`) is the **primary data source**. Consumed in
 `relayer/src/txodds.ts` (feed) and `relayer/src/verified.ts` (proof mapping):
@@ -261,29 +290,29 @@ full pipeline runs on a *simulated* feed with no key.
 
 ### Architecture notes (vs. the brief's options)
 - **Verification approach.** We implemented the brief's *"Experimental Verification
-  Layer"* — an **independent on-chain Merkle verifier** (`merkle.rs`) over TxLINE's
-  scores-validation proof primitive — rather than CPI'ing into TxLINE's
+  Layer"*, an **independent on-chain Merkle verifier** (`merkle.rs`) over TxLINE's
+  scores-validation proof primitive, rather than CPI'ing into TxLINE's
   `validate_stat`. Rationale: it works against the simulated feed with no live-program
   dependency and demonstrates the validation logic transparently. A CPI into
   `validate_stat` is a natural drop-in for the final fold step where that program is
-  available on the target cluster — the `commit_result_verified` boundary is shaped to
+  available on the target cluster, the `commit_result_verified` boundary is shaped to
   accept it.
 - **Streaming.** We consume the REST snapshot endpoints via the relayer poll loop;
   the loop is stream-ready and can swap to the **SSE scores stream** for push-based
   resolution triggers without touching the on-chain logic.
 
-## TxLINE API — our feedback
+## TxLINE API, our feedback
 *What we liked:* the **single normalised JSON schema** made scaling from one fixture
 to the whole tournament trivial; the **guest JWT** is a frictionless way to start; and
 the **cryptographic Merkle proofs** are exactly the primitive an on-chain settlement
-engine needs — being able to *verify* the score rather than *trust* a relayer is the
+engine needs, being able to *verify* the score rather than *trust* a relayer is the
 feature that made our whole design possible. Free World Cup access removed all
 commercial friction.
 
 *Where we hit friction:* (1) the **proof's hash function and leaf byte-encoding aren't
 specified** in the public docs, so our on-chain leaf hashing is a documented assumption
 (`merkle.rs`) we'd confirm against one real proof; (2) the **`X-Api-Token` requires the
-on-chain activate flow** — a guest JWT alone returns `403 Missing API token` on data
+on-chain activate flow**, a guest JWT alone returns `403 Missing API token` on data
 endpoints, which adds a step before first data; (3) **timestamp units are inconsistent**
 (fixtures `StartTime` in seconds, scores `ts` in ms); (4) the exact **`gameState`
 strings** for finished/abandoned aren't enumerated, so we match defensively.
@@ -295,14 +324,14 @@ strings** for finished/abandoned aren't enumerated, so we match defensively.
   would escalate to token-holder governance rather than a single admin key.
 
 
-## Striker — the Trading Tools & Agents entry (`bot/`)
+## Striker, the Trading Tools & Agents entry (`bot/`)
 
 A Telegram trading bot ([@tx0ddsbot](https://t.me/tx0ddsbot)) that treats the pools like a trading desk treats an order book.
 
-**Autonomous operation** — the engine (`bot/src/engine.ts`) runs unattended on a 12s loop with zero human input:
+**Autonomous operation**, the engine (`bot/src/engine.ts`) runs unattended on a 12s loop with zero human input:
 odds orders fire when a pool multiplier crosses a user's trigger, snipes enter new markets seconds after creation,
 copy-betting mirrors tracked wallets, and settlement pushes notify winners. Every autonomous action appends a
-timestamped line to `striker-decisions.log` — trigger condition, sizes, and tx signature — so the strategy is auditable:
+timestamped line to `striker-decisions.log`, trigger condition, sizes, and tx signature, so the strategy is auditable:
 
 ```
 2026-07-18T09:14:02.113Z [odds-order] user=… Spain v Germany outcome=Draw amt=25 trigger>=4x got=12.15x sig=5XGJ9nW7HDoa

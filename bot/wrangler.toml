@@ -1,0 +1,21 @@
+name = "striker-bot"
+main = "src/worker.ts"
+compatibility_date = "2026-07-01"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+
+[[durable_objects.bindings]]
+name = "BOT_DO"
+class_name = "BotDO"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["BotDO"]
+
+[triggers]
+crons = ["* * * * *"]
+
+[vars]
+RPC_URL = "https://solana-devnet.api.onfinality.io/public"
+USDC_MINT = "C3Edg8T9SWbB1dh6fRUKwSkAjeEomCM1yeKQqBGbNyCj"
+PUBLIC_URL = "https://striker-bot.arnav23apr.workers.dev"

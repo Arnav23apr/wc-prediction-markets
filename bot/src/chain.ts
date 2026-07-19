@@ -1,79 +1,100 @@
 /**
- * Chain layer for Striker: custodial keypairs per Telegram user, demo-USDC
- * faucet, market reads and bet/claim writes against the prediction-market
- * program. Demo custody on a local cluster; a production build would use
- * session keys or wallet-connect deep links instead.
+ * Chain layer for Striker, Workers edition.
+ *
+ * No filesystem: config (RPC, admin key, USDC mint) is injected once per
+ * invocation via initChain(), custodial keypairs live in KV-backed memory
+ * (persist.mem.keys), and the IDL is bundled. Anchor runs at the edge with a
+ * lightweight wallet, and transactions are confirmed by HTTP polling since the
+ * Workers runtime has no websocket for the usual confirmTransaction path.
  */
 import * as anchor from "@coral-xyz/anchor";
-import * as fs from "fs";
-import * as path from "path";
-import { Connection, Keypair, PublicKey, LAMPORTS_PER_SOL, SystemProgram } from "@solana/web3.js";
+import { Connection, Keypair, PublicKey, LAMPORTS_PER_SOL, SystemProgram, Transaction, TransactionInstruction } from "@solana/web3.js";
 import {
   TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync, getAccount,
   createAssociatedTokenAccountIdempotentInstruction, createMintToInstruction,
 } from "@solana/spl-token";
-
-const RPC = process.env.RPC_URL ?? "http://127.0.0.1:8990";
-const KEYS_DIR = path.resolve(__dirname, "../.keys");
-const IDL_PATH = path.resolve(__dirname, "../../app/src/idl/prediction_market.json");
-const DEMO_ADMIN = path.resolve(__dirname, "../../relayer/.demo-admin.json");
-const DEMO_MINT = path.resolve(__dirname, "../../relayer/.demo-mint.txt");
+import idl from "../../app/src/idl/prediction_market.json";
+import { mem, markDirty } from "./persist";
 
 export const OUTCOMES = ["Home", "Draw", "Away"] as const;
 export const USDC_DECIMALS = 6;
 export const toUi = (base: number) => base / 10 ** USDC_DECIMALS;
 export const toBase = (ui: number) => Math.round(ui * 10 ** USDC_DECIMALS);
 
-const conn = new Connection(RPC, "confirmed");
-const idl = JSON.parse(fs.readFileSync(IDL_PATH, "utf8"));
-if (!fs.existsSync(KEYS_DIR)) fs.mkdirSync(KEYS_DIR, { recursive: true });
+// ---- lazy config (set by the worker before any chain call) ----
+let conn: Connection;
+let admin: Keypair;
+let USDC_MINT: PublicKey;
+let readProgram: anchor.Program;
+let pid: PublicKey;
 
-const admin = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(DEMO_ADMIN, "utf8"))));
-const USDC_MINT = new PublicKey(fs.readFileSync(DEMO_MINT, "utf8").trim());
-
-function programFor(kp: Keypair): anchor.Program {
-  return new anchor.Program(idl, new anchor.AnchorProvider(conn, new anchor.Wallet(kp), { commitment: "confirmed" }));
+/** Edge-safe wallet: anchor.Wallet (NodeWallet) is filesystem-based and undefined
+ *  in a Workers bundle, so provide the minimal signing interface ourselves. */
+function edgeWallet(kp: Keypair): any {
+  return {
+    publicKey: kp.publicKey,
+    payer: kp,
+    signTransaction: async (tx: any) => { (tx.partialSign ? tx.partialSign(kp) : tx.sign([kp])); return tx; },
+    signAllTransactions: async (txs: any[]) => { txs.forEach((t) => (t.partialSign ? t.partialSign(kp) : t.sign([kp]))); return txs; },
+  };
 }
-const readProgram = programFor(Keypair.generate());
-const pid = readProgram.programId;
 
-const enc = (s: string) => Buffer.from(s);
+export function initChain(cfg: { RPC_URL: string; USDC_MINT: string; ADMIN_SECRET: string }) {
+  conn = new Connection(cfg.RPC_URL, "confirmed");
+  admin = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(cfg.ADMIN_SECRET)));
+  USDC_MINT = new PublicKey(cfg.USDC_MINT);
+  readProgram = new anchor.Program(idl as anchor.Idl, new anchor.AnchorProvider(conn, edgeWallet(Keypair.generate()), { commitment: "confirmed" }));
+  pid = readProgram.programId;
+}
+
+const enc = (s: string) => new TextEncoder().encode(s);
 export const positionPda = (market: PublicKey, owner: PublicKey) =>
   PublicKey.findProgramAddressSync([enc("position"), market.toBuffer(), owner.toBuffer()], pid)[0];
 
 export function userKeypair(tgId: number): Keypair {
-  const p = path.join(KEYS_DIR, `${tgId}.json`);
-  if (fs.existsSync(p)) return Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(p, "utf8"))));
+  const bytes = mem.keys[String(tgId)];
+  if (bytes) return Keypair.fromSecretKey(Uint8Array.from(bytes));
   const kp = Keypair.generate();
-  fs.writeFileSync(p, JSON.stringify(Array.from(kp.secretKey)), { mode: 0o600 });
+  mem.keys[String(tgId)] = Array.from(kp.secretKey);
+  markDirty();
   return kp;
 }
 export const ownerOf = (tgId: number) => userKeypair(tgId).publicKey;
 
+/** Sign, send, and confirm by HTTP polling (no websocket in Workers). */
+async function sendIx(ixs: TransactionInstruction[], signers: Keypair[]): Promise<string> {
+  const tx = new Transaction().add(...ixs);
+  tx.feePayer = signers[0].publicKey;
+  tx.recentBlockhash = (await conn.getLatestBlockhash("confirmed")).blockhash;
+  tx.sign(...signers);
+  const sig = await conn.sendRawTransaction(tx.serialize(), { skipPreflight: false, maxRetries: 3 });
+  for (let i = 0; i < 8; i++) {
+    const st = (await conn.getSignatureStatuses([sig])).value[0];
+    if (st?.err) throw new Error("transaction failed");
+    if (st && (st.confirmationStatus === "confirmed" || st.confirmationStatus === "finalized")) return sig;
+    await new Promise((r) => setTimeout(r, 1200));
+  }
+  return sig; // best-effort: usually lands, agent only needs the signature to log
+}
+
 /** SOL for fees + 1,000 demo USDC on first touch. Returns UI balance. */
 export async function ensureFunded(tgId: number): Promise<number> {
   const kp = userKeypair(tgId);
-  if ((await conn.getBalance(kp.publicKey)) < 0.05 * LAMPORTS_PER_SOL) {
-    // devnet faucet rate-limits; fall back to a transfer from the demo admin
+  if ((await conn.getBalance(kp.publicKey)) < 0.03 * LAMPORTS_PER_SOL) {
     try {
-      await conn.confirmTransaction(await conn.requestAirdrop(kp.publicKey, 0.2 * LAMPORTS_PER_SOL), "confirmed");
+      await conn.confirmTransaction(await conn.requestAirdrop(kp.publicKey, 0.1 * LAMPORTS_PER_SOL), "confirmed");
     } catch {
-      const { Transaction, sendAndConfirmTransaction } = await import("@solana/web3.js");
-      const tx = new Transaction().add(
-        SystemProgram.transfer({ fromPubkey: admin.publicKey, toPubkey: kp.publicKey, lamports: Math.round(0.05 * LAMPORTS_PER_SOL) })
-      );
-      await sendAndConfirmTransaction(conn, tx, [admin]);
+      await sendIx([SystemProgram.transfer({ fromPubkey: admin.publicKey, toPubkey: kp.publicKey, lamports: Math.round(0.03 * LAMPORTS_PER_SOL) })], [admin]);
     }
   }
   const ata = getAssociatedTokenAddressSync(USDC_MINT, kp.publicKey);
   let bal = 0;
   try { bal = Number((await getAccount(conn, ata)).amount); } catch { /* no ata yet */ }
   if (bal < toBase(50)) {
-    const tx = new anchor.web3.Transaction().add(
+    await sendIx([
       createAssociatedTokenAccountIdempotentInstruction(admin.publicKey, ata, kp.publicKey, USDC_MINT),
-      createMintToInstruction(USDC_MINT, ata, admin.publicKey, BigInt(toBase(1000)))
-    );
-    await anchor.web3.sendAndConfirmTransaction(conn, tx, [admin]);
+      createMintToInstruction(USDC_MINT, ata, admin.publicKey, BigInt(toBase(1000))),
+    ], [admin]);
     bal += toBase(1000);
   }
   return toUi(bal);
@@ -87,21 +108,10 @@ export async function usdcBalance(tgId: number): Promise<number> {
 }
 
 export interface Market {
-  pubkey: PublicKey;
-  matchId: number;
-  home: string;
-  away: string;
-  status: string;
-  bettingCloseTs: number;
-  pools: number[];
-  totalPool: number;
-  feeBps: number;
-  finalOutcome: number;
-  resultVerified: boolean;
-  homeGoals: number;
-  awayGoals: number;
-  usdcMint: PublicKey;
-  vault: PublicKey;
+  pubkey: PublicKey; matchId: number; home: string; away: string; status: string;
+  bettingCloseTs: number; pools: number[]; totalPool: number; feeBps: number;
+  finalOutcome: number; resultVerified: boolean; homeGoals: number; awayGoals: number;
+  usdcMint: PublicKey; vault: PublicKey;
 }
 const toNum = (v: any) => (anchor.BN.isBN(v) ? v.toNumber() : Number(v));
 
@@ -138,7 +148,6 @@ export function multiplier(m: Market, outcome: number): number {
   if (win === 0) return 0;
   return (total * (1 - m.feeBps / 10000)) / win;
 }
-/** What `amount` on `outcome` returns if it wins (after your own bet moves the pool). */
 export function payoutPreview(m: Market, outcome: number, amount: number): { payout: number; mult: number } {
   const amt = toBase(amount);
   const win = m.pools[outcome] + amt;
@@ -149,20 +158,15 @@ export function payoutPreview(m: Market, outcome: number, amount: number): { pay
 
 export async function placeBet(tgId: number, m: Market, outcome: number, amount: number): Promise<string> {
   const kp = userKeypair(tgId);
-  const program = programFor(kp);
   const ata = getAssociatedTokenAddressSync(m.usdcMint, kp.publicKey);
-  return program.methods
+  const ix = await readProgram.methods
     .placeBet(outcome, new anchor.BN(toBase(amount)))
     .accounts({
-      bettor: kp.publicKey,
-      market: m.pubkey,
-      position: positionPda(m.pubkey, kp.publicKey),
-      vault: m.vault,
-      bettorTokenAccount: ata,
-      tokenProgram: TOKEN_PROGRAM_ID,
-      systemProgram: SystemProgram.programId,
+      bettor: kp.publicKey, market: m.pubkey, position: positionPda(m.pubkey, kp.publicKey),
+      vault: m.vault, bettorTokenAccount: ata, tokenProgram: TOKEN_PROGRAM_ID, systemProgram: SystemProgram.programId,
     })
-    .rpc();
+    .instruction();
+  return sendIx([ix], [kp]);
 }
 
 export interface Position { market: PublicKey; owner: string; stakes: number[]; totalStake: number; claimed: boolean }
@@ -185,19 +189,15 @@ export async function positionsOf(tgId: number): Promise<Position[]> {
 
 export async function claim(tgId: number, m: Market): Promise<string> {
   const kp = userKeypair(tgId);
-  const program = programFor(kp);
   const ata = getAssociatedTokenAddressSync(m.usdcMint, kp.publicKey);
-  return program.methods
+  const ix = await readProgram.methods
     .claim()
     .accounts({
-      claimant: kp.publicKey,
-      market: m.pubkey,
-      position: positionPda(m.pubkey, kp.publicKey),
-      vault: m.vault,
-      claimantTokenAccount: ata,
-      tokenProgram: TOKEN_PROGRAM_ID,
+      claimant: kp.publicKey, market: m.pubkey, position: positionPda(m.pubkey, kp.publicKey),
+      vault: m.vault, claimantTokenAccount: ata, tokenProgram: TOKEN_PROGRAM_ID,
     })
-    .rpc();
+    .instruction();
+  return sendIx([ix], [kp]);
 }
 
 /** Deterministic simulated consensus odds (labelled SIM until the live TxODDS token lands). */

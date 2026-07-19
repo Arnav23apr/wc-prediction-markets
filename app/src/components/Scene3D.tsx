@@ -64,7 +64,7 @@ function Scene() {
       <ambientLight intensity={0.7} />
       <directionalLight position={[5, 6, 4]} intensity={2.0} color="#ffffff" />
       <pointLight position={[-5, 2, 3]} intensity={1.8} color="#fbbf24" />
-      <pointLight position={[4, -3, 2]} intensity={1.3} color="#8b5cf6" />
+      <pointLight position={[4, -3, 2]} intensity={1.3} color="#f0a92a" />
       <Ball />
       <Sparkles count={90} scale={[16, 11, 7]} size={1.3} speed={0.25} color="#fbbf24" opacity={0.4} />
     </>

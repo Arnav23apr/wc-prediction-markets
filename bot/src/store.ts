@@ -2,10 +2,7 @@
  * Flat-file store: users, bet-size presets, odds orders, copy-betting follows,
  * sniper subscriptions, and notification bookkeeping for the engine loop.
  */
-import * as fs from "fs";
-import * as path from "path";
-
-const FILE = path.resolve(__dirname, "../.store.json");
+import { mem, markDirty } from "./persist";
 
 export interface OddsOrder {
   id: number;
@@ -21,7 +18,7 @@ export interface Follow {
   amount: number;    // fixed size per mirrored bet
 }
 
-interface Data {
+export interface Data {
   users: Record<string, { name: string; preset: number }>;
   orders: OddsOrder[];
   nextOrderId: number;
@@ -32,13 +29,9 @@ interface Data {
   settledNotified: number[];                          // matchIds users were told about
 }
 
-function load(): Data {
-  if (!fs.existsSync(FILE)) {
-    return { users: {}, orders: [], nextOrderId: 1, follows: [], snipers: {}, knownMarkets: [], copySeen: {}, settledNotified: [] };
-  }
-  return JSON.parse(fs.readFileSync(FILE, "utf8"));
-}
-function save(d: Data) { fs.writeFileSync(FILE, JSON.stringify(d, null, 1)); }
+// Backed by module memory (hydrated from KV per invocation), so these stay sync.
+function load(): Data { return mem.store; }
+function save(_d?: Data) { markDirty(); }
 
 export const addUser = (tgId: number, name: string) => { const d = load(); d.users[tgId] = { name, preset: d.users[tgId]?.preset ?? 10 }; save(d); };
 export const allUsers = () => Object.keys(load().users).map(Number);

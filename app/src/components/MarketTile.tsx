@@ -13,6 +13,16 @@ interface Props {
   market: MarketData;
   onOpen: (m: MarketData, outcome?: number) => void;
   onCinema?: (m: MarketData) => void;
+  /** grid position — drives the staggered entrance cascade */
+  index?: number;
+}
+
+/** Cursor-follow spotlight: writes the pointer position into CSS vars the
+ *  `.mt::before` radial reads, so each card lights up under the cursor. */
+function spotlight(e: React.PointerEvent<HTMLElement>) {
+  const r = e.currentTarget.getBoundingClientRect();
+  e.currentTarget.style.setProperty("--sx", `${((e.clientX - r.left) / r.width) * 100}%`);
+  e.currentTarget.style.setProperty("--sy", `${((e.clientY - r.top) / r.height) * 100}%`);
 }
 
 /** Relative close time — one clock format everywhere, no timezone ambiguity. */
@@ -24,7 +34,7 @@ const fmtCloses = (ts: number) => {
   return `closes in ${Math.floor(sec / 86400)}d`;
 };
 
-export function MarketTile({ market, onOpen, onCinema }: Props) {
+export function MarketTile({ market, onOpen, onCinema, index = 0 }: Props) {
   const pct = impliedPct(market.pools);
   const now = Math.floor(Date.now() / 1000);
   const open = market.status === "open" && now < market.bettingCloseTs;
@@ -57,7 +67,12 @@ export function MarketTile({ market, onOpen, onCinema }: Props) {
   };
 
   return (
-    <article className="mt" onClick={() => onOpen(market)}>
+    <article
+      className="mt"
+      onClick={() => onOpen(market)}
+      onPointerMove={spotlight}
+      style={{ ["--i" as string]: index } as React.CSSProperties}
+    >
       <div className="mt-top">
         <span title={new Date(market.bettingCloseTs * 1000).toLocaleString()}>
           {terminal ? (market.status === "voided" ? "Voided" : "Full time") : fmtCloses(market.bettingCloseTs)}

@@ -46,6 +46,7 @@ interface ParticleSphereRefactorProps {
     clickForce?: number
     sphereColor?: string
     pentagonColor?: string
+    assemble?: boolean
     style?: React.CSSProperties
 }
 
@@ -196,7 +197,8 @@ export default function ParticleSphereRefactor({
     cursorStrengthUI = 10,
     clickForce = 5,
     sphereColor = "#ffffff",
-    pentagonColor = "#8b80f9",
+    pentagonColor = "#ffc65c",
+    assemble = false,
     style,
 }: ParticleSphereRefactorProps) {
     // Flat controls rebuilt into the config objects the engine expects.
@@ -396,7 +398,11 @@ export default function ParticleSphereRefactor({
 
             // Store base position and initialize displacement and scatter velocity
             baseParticlePositionsRef.current.push(new Vector3(posX, posY, posZ))
-            particleDisplacementsRef.current.push(new Vector3(0, 0, 0))
+            // assemble intro: start scattered far out, ease home via return-force
+            const d0 = assemble
+                ? new Vector3(Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1).normalize().multiplyScalar(2 + Math.random() * 4)
+                : new Vector3(0, 0, 0)
+            particleDisplacementsRef.current.push(d0)
             particleScatterVelocitiesRef.current.push(new Vector3(0, 0, 0))
         }
 
@@ -1452,6 +1458,7 @@ export default function ParticleSphereRefactor({
         scaleMultiplier,
         particleSize,
         isCanvas,
+        assemble,
     ])
 
     // Container styles

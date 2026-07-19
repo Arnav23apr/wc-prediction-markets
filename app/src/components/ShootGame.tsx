@@ -217,7 +217,7 @@ export function ShootGame({ open, onClose }: { open: boolean; onClose: () => voi
   const ss = String(time % 60).padStart(2, "0");
 
   return (
-    <div className="game-overlay">
+    <div className="game-overlay" data-lenis-prevent>
       <canvas ref={canvasRef} className="game-canvas" />
       <button className="game-close" onClick={onClose} data-no-sfx>CLOSE GAME [ESC]</button>
       <div className="game-hud">

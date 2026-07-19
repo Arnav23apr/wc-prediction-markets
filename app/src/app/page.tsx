@@ -16,7 +16,6 @@ import { getProgram, getReadonlyProgram } from "@/lib/program";
 import { fetchMarkets, fetchUsdcBalance, MarketData } from "@/lib/markets";
 import { TrustBar } from "@/components/TrustBar";
 import { ActivityTicker } from "@/components/ActivityTicker";
-import { WorldMatches } from "@/components/WorldMatches";
 import { HowItWorks } from "@/components/HowItWorks";
 import { SoundToggle } from "@/components/SoundToggle";
 import { GsapMotion } from "@/components/GsapMotion";
@@ -27,6 +26,7 @@ import { MarketDetail } from "@/components/MarketDetail";
 import { SettlementCinema } from "@/components/SettlementCinema";
 import { SettlementBento } from "@/components/SettlementBento";
 import { Reveal } from "@/components/Reveal";
+import { SegGroup } from "@/components/SegGroup";
 import { toUi } from "@/lib/markets";
 import { useCountUp } from "@/lib/useCountUp";
 import { PROGRAM_ID, RPC_URL } from "@/lib/program";
@@ -45,7 +45,6 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [balance, setBalance] = useState<number | null>(null);
-  const [worldOpen, setWorldOpen] = useState(false);
   const [hiwOpen, setHiwOpen] = useState(false);
   const [sort, setSort] = useState<SortKey>("closing");
   const [filter, setFilter] = useState<FilterKey>("all");
@@ -159,20 +158,12 @@ export default function Home() {
 
       <FeaturedBanner markets={markets} onOpen={(m) => { setSelectedOutcome(undefined); setSelected(m); }} onJump={scrollToGrid} />
 
-      <div className="statline">
-        <span><b>{markets.length}</b> markets</span>
-        <i className="sep" aria-hidden="true" />
-        <span><b>${pooledAnim.toLocaleString()}</b> pooled</span>
-        <i className="sep" aria-hidden="true" />
-        {verifiedCount > 0
-          ? <span><b>{verifiedCount}</b> proof-verified</span>
-          : <span>proofs land at full time</span>}
-        <i className="sep" aria-hidden="true" />
-        <button className="hero-maplink" onClick={() => setWorldOpen(true)}>World map ↗</button>
-        <button className="hero-maplink" onClick={() => setHiwOpen(true)}>How settlement works</button>
-      </div>
-
-      <TrustBar verifiedCount={verifiedCount} onHowItWorks={() => setHiwOpen(true)} />
+      <TrustBar
+        markets={markets.length}
+        pooled={pooledAnim}
+        verifiedCount={verifiedCount}
+        onHowItWorks={() => setHiwOpen(true)}
+      />
       <ActivityTicker markets={markets} />
 
       <div className="section-head">
@@ -184,17 +175,19 @@ export default function Home() {
 
       {markets.length > 0 && (
         <div className="toolbar">
-          <div className="tb-group" role="group" aria-label="Filter markets">
-            {FILTERS.map((f) => (
-              <button key={f.k} className={`tb ${filter === f.k ? "on" : ""}`} onClick={() => setFilter(f.k)}>{f.label}</button>
-            ))}
-          </div>
-          <div className="tb-group">
-            <span className="tb-label">Sort</span>
-            {SORTS.map((s) => (
-              <button key={s.k} className={`tb ${sort === s.k ? "on" : ""}`} onClick={() => setSort(s.k)}>{s.label}</button>
-            ))}
-          </div>
+          <SegGroup
+            ariaLabel="Filter markets"
+            items={FILTERS}
+            value={filter}
+            onChange={setFilter}
+          />
+          <SegGroup
+            label="Sort"
+            ariaLabel="Sort markets"
+            items={SORTS}
+            value={sort}
+            onChange={setSort}
+          />
         </div>
       )}
 
@@ -211,10 +204,11 @@ export default function Home() {
           {!loading && !error && markets.length > 0 && shown.length === 0 && (
             <p className="hint">No markets match this filter.</p>
           )}
-          {shown.map((m) => (
+          {shown.map((m, i) => (
             <MarketTile
               key={m.pubkey.toBase58()}
               market={m}
+              index={i}
               onOpen={(m, o) => { setSelectedOutcome(o); setSelected(m); }}
               onCinema={setCinema}
             />
@@ -222,16 +216,6 @@ export default function Home() {
         </section>
       </Reveal>
 
-      <WorldMatches
-        open={worldOpen}
-        onClose={() => setWorldOpen(false)}
-        markets={markets}
-        onJump={() =>
-          requestAnimationFrame(() =>
-            document.getElementById("markets-grid")?.scrollIntoView({ behavior: "smooth", block: "start" })
-          )
-        }
-      />
       <SettlementBento />
 
       {cinema && <SettlementCinema market={cinema} onClose={() => setCinema(null)} />}
@@ -254,7 +238,6 @@ export default function Home() {
         markets={markets}
         onFilter={setFilter}
         onHowItWorks={() => setHiwOpen(true)}
-        onWorldMap={() => setWorldOpen(true)}
         onJump={scrollToGrid}
         onExplorer={() => window.open(explorerUrl(PROGRAM_ID.toBase58(), "address", RPC_URL), "_blank")}
         onOpenMarket={(m) => { setSelectedOutcome(undefined); setSelected(m); }}

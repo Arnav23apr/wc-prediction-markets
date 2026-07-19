@@ -4,7 +4,9 @@
   "private": true,
   "description": "Striker: the Telegram trading bot for proof-settled World Cup markets. Instant bets, odds orders, copy-betting, market sniping, PnL.",
   "scripts": {
-    "bot": "ts-node --transpile-only src/bot.ts",
+    "bot": "RUN_POLLING=1 ts-node -r dotenv/config --transpile-only src/bot.ts",
+    "deploy": "wrangler deploy",
+    "setup": "curl https://striker-bot.arnav23apr.workers.dev/setup",
     "build": "tsc --noEmit"
   },
   "dependencies": {

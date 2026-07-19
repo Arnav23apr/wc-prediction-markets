@@ -13,12 +13,13 @@ import {
 
 const label = (m: Market) => `${m.home} v ${m.away}`;
 
-import * as fs from "fs";
-const DECISION_LOG = "striker-decisions.log";
+import { mem, markDirty } from "./persist";
+import { agentTick } from "./agent";
 export function logDecision(kind: string, detail: string) {
-  const line = `${new Date().toISOString()} [${kind}] ${detail}\n`;
-  try { fs.appendFileSync(DECISION_LOG, line); } catch { /* best-effort */ }
-  console.log(line.trim());
+  const line = `${new Date().toISOString()} [${kind}] ${detail}`;
+  mem.log.push(line);
+  markDirty();
+  console.log(line);
 }
 
 export async function tick(api: Api) {
@@ -134,8 +135,7 @@ export async function tick(api: Api) {
 }
 
 export function startEngine(api: Api, intervalMs = 12_000) {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { agentTick } = require("./agent");
+  // Polling mode only (local dev). The Worker calls tick()/agentTick() on a cron.
   setInterval(() => {
     tick(api).catch((e) => console.error("engine:", e.message ?? e));
     agentTick().catch((e: any) => console.error("agent:", e.message ?? e));

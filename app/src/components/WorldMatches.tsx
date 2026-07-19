@@ -63,7 +63,7 @@ export function WorldMatches({ open, onClose, markets, onJump }: Props) {
   });
 
   return (
-    <div className="wm-backdrop" onClick={onClose} role="dialog" aria-modal="true" aria-label="Markets around the world">
+    <div className="wm-backdrop" onClick={onClose} role="dialog" aria-modal="true" aria-label="Markets around the world" data-lenis-prevent>
       <div className="wm-panel" onClick={(e) => e.stopPropagation()}>
         <div className="wm-head">
           <div>

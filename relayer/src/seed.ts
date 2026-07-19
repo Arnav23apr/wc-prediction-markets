@@ -59,41 +59,85 @@ async function main() {
   }
   const treasury = (await getOrCreateAssociatedTokenAccount(conn, admin, mint, admin.publicKey)).address;
   const oracle = Keypair.generate();
-  const closeTs = new BN(Math.floor(Date.now() / 1000) + Number(process.env.DAYS_OPEN ?? 1) * 24 * 3600);
 
   const fund = async (give: number) => {
     await pace();
     const kp = Keypair.generate();
-    await airdrop(conn, kp.publicKey, 0.05, admin);
+    await airdrop(conn, kp.publicKey, 0.03, admin);
     const ata = (await getOrCreateAssociatedTokenAccount(conn, admin, mint, kp.publicKey)).address;
     await mintTo(conn, admin, mint, ata, admin, BigInt(usdc(give).toString()));
     return { kp, ata };
   };
-  const bettors = await Promise.all([fund(2000), fund(2000), fund(2000)]);
+  // Four well-funded bettors, reused across the slate, so pools and bettor
+  // counts vary per market without airdropping a fresh wallet each time.
+  // Funded SEQUENTIALLY (not Promise.all) so the public devnet RPC's per-call
+  // rate limit isn't saturated by a concurrent burst.
+  const NBETTORS = 3;
+  const bettors: { kp: Keypair; ata: PublicKey }[] = [];
+  for (let i = 0; i < NBETTORS; i++) {
+    bettors.push(await fund(40000));
+    console.log(`  funded bettor ${i + 1}/${NBETTORS}`);
+    await pace(1500);
+  }
 
-  const seed = async (matchId: number, home: string, away: string, bets: [number, number][]) => {
+  /** Seed one market. `days` sets the close window (fractional ok) so the
+   *  "Closing soon" sort has real spread across the tournament. `who` picks
+   *  which bettor wallets take each bet, driving distinct bettor counts. */
+  const seed = async (
+    matchId: number,
+    home: string,
+    away: string,
+    bets: [number, number][],
+    days = 8,
+    who?: number[]
+  ) => {
     const market = marketPda(matchId);
     if (await conn.getAccountInfo(market)) { console.log(`  ${home} vs ${away} already seeded, skipping`); return; }
     const vault = vaultPda(market);
+    const mktClose = new BN(Math.floor(Date.now() / 1000) + Math.round(days * 24 * 3600));
     await program.methods
-      .initializeMarket(new BN(matchId), closeTs, new BN(3600), 200, oracle.publicKey, admin.publicKey, home, away)
+      .initializeMarket(new BN(matchId), mktClose, new BN(3600), 200, oracle.publicKey, admin.publicKey, home, away)
       .accounts({ authority: admin.publicKey, market, usdcMint: mint, vault, treasury, tokenProgram: TOKEN_PROGRAM_ID })
       .rpc();
     for (let i = 0; i < bets.length; i++) {
       const [outcome, amount] = bets[i];
-      const { kp, ata } = bettors[i % bettors.length];
+      const { kp, ata } = bettors[(who ? who[i % who.length] : i) % bettors.length];
       await program.methods
         .placeBet(outcome, usdc(amount))
         .accounts({ bettor: kp.publicKey, market, position: positionPda(market, kp.publicKey), vault, bettorTokenAccount: ata, tokenProgram: TOKEN_PROGRAM_ID })
         .signers([kp]).rpc();
     }
-    console.log(`  seeded ${home} vs ${away}`);
+    console.log(`  seeded ${home} vs ${away} (closes ~${days}d, ${bets.length} bets)`);
   };
 
-  console.log("seeding markets...");
-  await pace(1200); await seed(9101 + OFFSET, "Argentina", "France", [[HOME, 500], [AWAY, 200], [DRAW, 100]]);
-  await pace(1200); await seed(9102 + OFFSET, "Brazil", "England", [[HOME, 300], [AWAY, 300]]);
-  await pace(1200); await seed(9103 + OFFSET, "Spain", "Germany", [[AWAY, 400], [HOME, 150], [DRAW, 50]]);
+  // Whole-tournament slate: original marquee three plus a broad group/knockout
+  // spread, with varied pools, bettor counts, and close windows so the board
+  // reads like a live World Cup, not a demo of three.
+  type Fx = { id: number; home: string; away: string; bets: [number, number][]; days?: number; who?: number[] };
+  const FIXTURES: Fx[] = [
+    { id: 9101, home: "Argentina", away: "France", bets: [[HOME, 500], [AWAY, 200], [DRAW, 100]] },
+    { id: 9102, home: "Brazil", away: "England", bets: [[HOME, 300], [AWAY, 300]] },
+    { id: 9103, home: "Spain", away: "Germany", bets: [[AWAY, 400], [HOME, 150], [DRAW, 50]] },
+    { id: 9201, home: "Portugal", away: "Netherlands", bets: [[HOME, 600], [AWAY, 450], [DRAW, 200]], days: 0.03, who: [0, 1, 2] },
+    { id: 9202, home: "Belgium", away: "Croatia", bets: [[HOME, 300], [DRAW, 250], [AWAY, 150]], days: 0.08, who: [3, 4, 0] },
+    { id: 9203, home: "United States", away: "Mexico", bets: [[HOME, 400], [AWAY, 520]], days: 12, who: [1, 5] },
+    { id: 9205, home: "Japan", away: "Australia", bets: [[HOME, 500], [DRAW, 140]], days: 6, who: [0, 2] },
+    { id: 9206, home: "Italy", away: "Switzerland", bets: [[HOME, 700], [AWAY, 300], [DRAW, 220]], days: 14, who: [1, 2, 0] },
+    { id: 9210, home: "Serbia", away: "Ghana", bets: [[HOME, 240], [AWAY, 210], [DRAW, 150]], days: 0.06, who: [2, 0, 1] },
+    { id: 9211, home: "Nigeria", away: "Cameroon", bets: [[HOME, 330], [DRAW, 170], [AWAY, 200]], days: 11, who: [2, 1, 0] },
+    { id: 9212, home: "Qatar", away: "Egypt", bets: [[AWAY, 420], [HOME, 110], [DRAW, 90]], days: 15, who: [0, 1, 2] },
+    { id: 9214, home: "Brazil", away: "Argentina", bets: [[HOME, 900], [AWAY, 700], [DRAW, 300]], days: 18, who: [0, 1, 2] },
+  ];
+
+  console.log(`seeding ${FIXTURES.length} markets...`);
+  for (const f of FIXTURES) {
+    await pace(1200);
+    try {
+      await seed(f.id + OFFSET, f.home, f.away, f.bets, f.days ?? 8, f.who);
+    } catch (e: any) {
+      console.log(`  ! ${f.home} v ${f.away} failed: ${e.message?.slice(0, 120)} (continuing)`);
+    }
+  }
 
   console.log(`\nDone. Put this in app/.env.local:`);
   console.log(`NEXT_PUBLIC_RPC_URL=${config.rpcUrl}`);

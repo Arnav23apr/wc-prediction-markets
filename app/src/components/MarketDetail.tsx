@@ -66,7 +66,7 @@ export function MarketDetail({ market, program, owner, initialOutcome, onChanged
   );
 
   return (
-    <div className="md-backdrop" onClick={onClose}>
+    <div className="md-backdrop" onClick={onClose} data-lenis-prevent>
       <div className="md" role="dialog" aria-modal="true" aria-label={`${market.homeTeam} versus ${market.awayTeam} market`} onClick={(e) => e.stopPropagation()}>
         <header className="md-head">
           <div className="md-title">

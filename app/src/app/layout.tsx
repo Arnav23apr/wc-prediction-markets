@@ -5,6 +5,7 @@ import { ToastProvider } from "@/components/Toast";
 import { SmoothScroll } from "@/components/SmoothScroll";
 import { CursorGlow } from "@/components/CursorGlow";
 import { BootIntro } from "@/components/BootIntro";
+import { ScrollProgress } from "@/components/ScrollProgress";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3001";
 const DESCRIPTION = "Bet the World Cup in parimutuel pools on Solana. Results verified on-chain against TxLINE Merkle roots. No oracle, no vote, no bookie.";
@@ -42,6 +43,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body>
         <BootIntro />
+        <ScrollProgress />
         <SmoothScroll />
         <CursorGlow />
         <AppWalletProvider>

@@ -19,6 +19,18 @@ interface Props {
   onJump: () => void;
 }
 
+/** Magnetic pull: the button drifts toward the cursor, snapping back on leave.
+ *  Direct DOM writes (no React state) keep it off the render path. */
+const magnetMove = (e: React.PointerEvent<HTMLButtonElement>) => {
+  const r = e.currentTarget.getBoundingClientRect();
+  const mx = e.clientX - (r.left + r.width / 2);
+  const my = e.clientY - (r.top + r.height / 2);
+  e.currentTarget.style.transform = `translate(${(mx * 0.24).toFixed(1)}px, ${(my * 0.4).toFixed(1)}px)`;
+};
+const magnetLeave = (e: React.PointerEvent<HTMLButtonElement>) => {
+  e.currentTarget.style.transform = "";
+};
+
 export function FeaturedBanner({ markets, onOpen, onJump }: Props) {
   const now = Math.floor(Date.now() / 1000);
   const featured = markets
@@ -73,12 +85,12 @@ export function FeaturedBanner({ markets, onOpen, onJump }: Props) {
               hideCursorOnType={false}
               cursorChar="_"
               color="inherit"
-              typedColor="#c7c2f5"
-              cursorColor="#8b80f9"
+              typedColor="#f7dca0"
+              cursorColor="#ffc65c"
               style={{ display: "inline-flex", width: "auto", height: "auto" }}
             />
           </div>
-          <button className="fb-cta" onClick={onJump}>
+          <button className="fb-cta" onClick={onJump} onPointerMove={magnetMove} onPointerLeave={magnetLeave}>
             View all markets
             <span className="fb-cta-orb" aria-hidden="true">↗</span>
           </button>
@@ -97,7 +109,7 @@ export function FeaturedBanner({ markets, onOpen, onJump }: Props) {
             cursorStrengthUI={9}
             clickForce={5}
             sphereColor="#4a4c56"
-            pentagonColor="#b3a7ff"
+            pentagonColor="#ffcf6b"
           />
         </div>
       </div>

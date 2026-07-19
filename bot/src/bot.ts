@@ -6,7 +6,6 @@
  *
  *   BOT_TOKEN=… RPC_URL=http://127.0.0.1:8990 npm run bot
  */
-import "dotenv/config";
 import { Bot, InlineKeyboard } from "grammy";
 import {
   OUTCOMES, ensureFunded, usdcBalance, fetchMarkets, isOpen, impliedPct, multiplier,
@@ -16,10 +15,10 @@ import * as store from "./store";
 import { startEngine } from "./engine";
 import { bookOdds, edgesFor, sourceLabel } from "./txline";
 import { agentInfo, AGENT_ID } from "./agent";
-import * as fs from "fs";
+import { mem } from "./persist";
 
-const token = process.env.BOT_TOKEN;
-if (!token) { console.error("BOT_TOKEN missing (bot/.env)"); process.exit(1); }
+const token = process.env.BOT_TOKEN ?? (globalThis as any).__BOT_TOKEN;
+if (!token) throw new Error("BOT_TOKEN missing");
 const bot = new Bot(token);
 
 const label = (m: Market) => `${m.home} v ${m.away}`;
@@ -144,7 +143,7 @@ async function agentCard(): Promise<{ text: string; kb: InlineKeyboard }> {
   try { bal = await usdcBalance(AGENT_ID); } catch {}
   let tail = "";
   try {
-    const lines = fs.readFileSync("striker-decisions.log", "utf8").trim().split("\n").filter((l) => l.includes("[agent]"));
+    const lines = mem.log.filter((l) => l.includes("[agent]"));
     tail = lines.slice(-6).map((l) => {
       const t = l.slice(11, 19); // HH:MM:SS
       const msg = l.split("] ").slice(1).join("] ");
@@ -483,18 +482,27 @@ bot.command("preset", async (ctx) => {
 
 // ---------- boot ----------
 bot.catch((err) => console.error("bot error:", err.error));
-bot.api.setMyCommands([
-  { command: "menu", description: "Main menu" },
-  { command: "markets", description: "Open markets" },
-  { command: "edge", description: "Pool vs bookmaker value scan" },
-  { command: "agent", description: "Autonomous trading agent + live log" },
-  { command: "pnl", description: "Your book and balance" },
-  { command: "orders", description: "Your odds orders" },
-  { command: "toptraders", description: "Leaderboard, one-tap copy" },
-  { command: "snipe", description: "Auto-bet new markets" },
-  { command: "claim", description: "Collect wins and refunds" },
-  { command: "faucet", description: "Top up demo USDC" },
-  { command: "preset", description: "Default bet size" },
-  { command: "help", description: "How Striker works" },
-]).catch(() => {});
-bot.start({ onStart: (me) => { console.log(`@${me.username} is live`); startEngine(bot.api); } });
+export async function registerCommands() {
+  await bot.api.setMyCommands([
+    { command: "menu", description: "Main menu" },
+    { command: "markets", description: "Open markets" },
+    { command: "edge", description: "Pool vs bookmaker value scan" },
+    { command: "agent", description: "Autonomous trading agent + live log" },
+    { command: "pnl", description: "Your book and balance" },
+    { command: "orders", description: "Your odds orders" },
+    { command: "toptraders", description: "Leaderboard, one-tap copy" },
+    { command: "snipe", description: "Auto-bet new markets" },
+    { command: "claim", description: "Collect wins and refunds" },
+    { command: "faucet", description: "Top up demo USDC" },
+    { command: "preset", description: "Default bet size" },
+    { command: "help", description: "How Striker works" },
+  ]).catch(() => {});
+}
+
+// Local polling mode only. In the Worker, the runtime drives the bot via webhook.
+if (typeof process !== "undefined" && process.env.RUN_POLLING === "1") {
+  registerCommands();
+  bot.start({ onStart: (me) => { console.log(`@${me.username} is live`); startEngine(bot.api); } });
+}
+
+export { bot };

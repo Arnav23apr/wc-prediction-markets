@@ -1,6 +1,6 @@
 # Toolchain setup (macOS)
 
-One-time installs. **Read the toolchain note in README.md first** — because of an
+One-time installs. **Read the toolchain note in README.md first**, because of an
 Anchor 0.30.1 vs. modern-crates incompatibility, we build with the Agave 4.x SBF
 compiler directly (via `scripts/build.sh`) rather than `anchor build`.
 
@@ -9,7 +9,7 @@ compiler directly (via `scripts/build.sh`) rather than `anchor build`.
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 source "$HOME/.cargo/env"
 
-# 2. Solana CLI — the Agave 4.x STABLE release (ships platform-tools v1.53,
+# 2. Solana CLI, the Agave 4.x STABLE release (ships platform-tools v1.53,
 #    which can compile today's crates). This is the toolchain scripts/build.sh uses.
 sh -c "$(curl -sSfL https://release.anza.xyz/stable/install)"
 solana --version          # expect 4.x (Agave)
@@ -18,7 +18,7 @@ solana --version          # expect 4.x (Agave)
 npm install               # repo root (test deps)
 ```
 
-> Anchor CLI / `avm` are NOT required to build, test, or deploy this repo — the
+> Anchor CLI / `avm` are NOT required to build, test, or deploy this repo, the
 > scripts bypass them deliberately. (If you install Anchor anyway, its `anchor
 > build`/`anchor test` will fail here with `edition2024`/`anchor-syn` errors; that
 > is expected, use the scripts.)
@@ -43,8 +43,8 @@ address from `solana address`.
 ## Why not `anchor build`?
 Anchor 0.30.1 pins Solana 1.18.17 (cargo 1.75), which can't resolve crates that
 now require `edition2024`, and its IDL macro (`anchor-syn`) needs a removed
-`proc-macro2` API. The program is standard Anchor and compiles fine — only
-Anchor's *build wrapper* is the problem — so we drive `cargo-build-sbf` directly
+`proc-macro2` API. The program is standard Anchor and compiles fine, only
+Anchor's *build wrapper* is the problem, so we drive `cargo-build-sbf` directly
 and generate the IDL in `scripts/gen-idl.js`. If/when you upgrade the project to
 a current Anchor (0.31+), you can switch back to `anchor build`/`anchor test`.
 
@@ -55,7 +55,7 @@ a current Anchor (0.31+), you can switch back to `anchor build`/`anchor test`.
 
 ## Gotchas
 - After `anchor keys sync` the program id in `Anchor.toml` and `declare_id!` change
-  together — rebuild before deploying.
+  together, rebuild before deploying.
 - The frontend reads the IDL from `target/idl/`; `npm run dev` copies it automatically,
   so always `anchor build` before starting the app.
 - Devnet USDC here is a **test mint** you create (`setup-devnet`), not real USDC.

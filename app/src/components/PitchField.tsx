@@ -22,7 +22,7 @@ void main(){
   float aspect = uRes.x / uRes.y;
 
   vec3 col = vec3(0.031, 0.035, 0.047); // #08090c
-  vec3 violet = vec3(0.431, 0.384, 0.898); // #6e62e5
+  vec3 violet = vec3(0.941, 0.663, 0.165); // #f0a92a amber
   float horizon = 0.40;
 
   // ---- ground plane (below horizon) ----
